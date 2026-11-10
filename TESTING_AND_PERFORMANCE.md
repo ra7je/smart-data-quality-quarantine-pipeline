@@ -1,169 +1,197 @@
-# Testing and Performance – Smart Data Quality & Quarantine Pipeline
+# Testing and Performance
 
 ## 1. Overview
 
-I tested the pipeline using both a small sample dataset and a larger synthetic transaction dataset.
+I tested the Smart Data Quality & Quarantine Pipeline using automated Python tests, Snowflake verification queries, dbt tests and synthetic transaction datasets.
 
-The purpose of testing was to check whether the pipeline could identify invalid records, separate valid and rejected transactions, process larger datasets and maintain consistent results across the data layers.
+My testing approach covers individual validation functions, recovery scenarios, large-volume processing and data reconciliation.
 
 ## 2. Test Environment
 
-| Component | Technology |
+| Component | Configuration |
 |---|---|
-| Programming language | Python |
-| Data processing | PySpark |
+| Language | Python |
+| Test framework | pytest |
 | Database | Snowflake |
-| SQL transformations | Snowflake SQL |
-| Data modelling | dbt |
-| Unit testing | Python unittest / pytest |
-| Version control | Git and GitHub |
+| Data processing | PySpark |
+| Transformation | dbt |
+| Dataset | Synthetic transaction data |
+| Development environment | Windows and VS Code |
 
-## 3. Small Dataset Testing
+## 3. Automated Test Suite
 
-I started with a small dataset containing eight transactions.
+I organized the automated tests under the root-level `tests/` directory.
 
-The dataset included valid transactions, business validation failures and a duplicate record.
+```text
+tests/
+├── __init__.py
+├── test_validation_engine.py
+└── test_recovery_scenarios.py
+```
 
-### Expected results
+### 3.1 Validation Engine Tests
 
-| Category | Records |
+File: `tests/test_validation_engine.py`
+
+The validation tests cover:
+
+| Test case | Expected behaviour |
+|---|---|
+| Schema validation | Accept records with the required structure |
+| Business validation | Reject records that violate business conditions |
+| Duplicate event validation | Reject duplicate events |
+| Empty input | Handle empty input correctly |
+| Already-processed event | Reject an event that has already been processed |
+
+**Result: 5 tests passed.**
+
+### 3.2 Pipeline Recovery Tests
+
+File: `tests/test_recovery_scenarios.py`
+
+The recovery tests cover:
+
+| Test case | Expected behaviour |
+|---|---|
+| Failed attempt | Allow a failed attempt to be retried |
+| Failure after retries | Record the final failure |
+| Partial batch | Avoid automatically reprocessing a partially processed batch |
+| Successful batch | Skip an already successful batch |
+
+**Result: 4 tests passed.**
+
+## 4. Automated Test Execution
+
+Run the complete root-level test suite:
+
+```powershell
+python -m pytest tests/ -v
+```
+
+### Verified test results
+
+| Test file | Passed | Failed |
+|---|---:|---:|
+| test_validation_engine.py | 5 | 0 |
+| test_recovery_scenarios.py | 4 | 0 |
+| **Total** | **9** | **0** |
+
+<badge color="success">9/9 passed</badge>
+
+These results were obtained from the local test execution on November 10, 2026.
+
+## 5. Small Dataset Testing
+
+I used an eight-record transaction dataset to verify the initial validation and quarantine workflow.
+
+| Category | Expected records |
 |---|---:|
-| Total input records | 8 |
-| Valid records | 4 |
-| Business-invalid records | 3 |
-| Duplicate records | 1 |
-| Total rejected records | 4 |
+| Input transactions | 8 |
+| Valid transactions | 4 |
+| Business-invalid transactions | 3 |
+| Duplicate transactions | 1 |
+| Rejected transactions | 4 |
 
-### Processing result
+I also tested the replay workflow using a corrected transaction.
 
-The pipeline separated the valid records from rejected records and stored the rejected records in quarantine.
+## 6. Large Dataset Testing
 
-The replay workflow was also tested using a corrected transaction.
-
-The corrected transaction passed validation and was published to Silver.
-
-## 4. Large Dataset Testing
-
-To test larger-volume processing, I generated a synthetic dataset with the following characteristics.
+I generated a synthetic dataset to evaluate the pipeline with a larger transaction volume.
 
 | Dataset | Records |
 |---|---:|
 | Customers | 1,000 |
 | Transactions | 100,000 |
 
-The transaction dataset includes deliberately introduced data quality issues.
+The generated transactions include deliberately introduced data quality issues.
 
-### Expected transaction distribution
+### Expected distribution
 
 | Category | Records |
 |---|---:|
 | Valid transactions | 99,600 |
 | Business-invalid transactions | 300 |
 | Duplicate transactions | 100 |
-| Total rejected transactions | 400 |
-| Total input transactions | 100,000 |
+| Rejected transactions | 400 |
 
-These are the expected dataset counts based on the generation rules.
+These figures describe the expected generated dataset distribution, not a separately measured benchmark result.
 
-## 5. Data Quality Test Scenarios
+## 7. dbt Testing
 
-| Test scenario | Expected behaviour |
-|---|---|
-| Missing required information | Reject the record |
-| Unknown customer reference | Reject the record |
-| Negative transaction amount | Reject the record |
-| Invalid transaction type | Reject the record |
-| Duplicate transaction identifier | Identify the duplicate |
-| Corrected quarantined record | Revalidate through replay |
-| Valid transaction | Publish to Silver |
+The dbt project contains staging and analytical models with associated schema and data tests.
 
-## 6. dbt Testing
+The previously recorded dbt test execution completed with:
 
-I used dbt to test downstream models and data quality conditions.
+**10 tests passed out of 10.**
 
-The dbt project contains staging and analytical models, along with schema and data tests.
+## 8. Snowflake Reconciliation
 
-**Previously recorded test result:**
+The SQL verification scripts cover:
 
-<badge color="success">10/10 passed</badge>
+- Bronze, Silver and Quarantine record counts.
+- Source-to-target reconciliation.
+- Silver and Gold record comparisons.
+- Duplicate transaction identifiers.
+- Audit execution status.
+- Batch processing metrics.
 
-The reported result was ten successful dbt tests.
+Relevant scripts are maintained under `sql/audit/`.
 
-## 7. Python Testing
+## 9. Recovery and Replay Testing
 
-Python tests were used to validate individual pipeline components and processing behaviour.
+The recovery workflow is tested for successful batches, partial batches, retry scenarios and failure recording.
 
-The test coverage includes:
+The corrected-record replay workflow is separately exercised using the quarantine components.
 
-- Validation logic.
-- Transaction processing.
-- Pipeline status checks.
-- Recovery controller scenarios.
-
-The recovery scenarios include successful-batch handling, partial-processing handling, retry behaviour and failure recording.
-
-## 8. Reconciliation Testing
-
-Reconciliation checks compare records across the different pipeline layers.
-
-The main checks include:
-
-1. Bronze record count.
-2. Silver valid-record count.
-3. Quarantine rejected-record count.
-4. Bronze versus Silver plus Quarantine.
-5. Silver versus Gold.
-6. Duplicate transaction identifiers.
-7. Audit execution status.
-8. Audit counts against processing results.
-
-The SQL verification scripts are maintained under `sql/audit/`.
-
-## 9. Recovery Testing
-
-The recovery component checks the batch execution status before deciding whether processing should run again.
-
-The test scenarios cover:
-
-- Already successful batches.
-- Partially processed batches.
-- Failed processing attempts.
-- Retry handling.
-- Failure recording after unsuccessful attempts.
-
-The successful-batch scenario was tested to confirm that an already completed batch can be skipped instead of being unnecessarily reprocessed.
+The automated recovery controller tests use controlled test scenarios to verify the expected decisions.
 
 ## 10. Performance Testing
 
-The project includes a benchmark script for evaluating validation with the 100,000-record dataset.
-
-File:
+The project includes:
 
 `scripts/benchmark_100k_validation.py`
 
-The benchmark is intended to evaluate processing duration and large-volume validation behaviour.
+This script supports performance evaluation using the 100,000-record dataset.
 
-Actual benchmark timings should be taken from the execution output for the test environment.
+Processing duration and throughput should be reported from the actual benchmark execution rather than estimated.
 
-## 11. Test Evidence
+## 11. Test Commands
 
-The following project files support the testing and verification workflow:
+Run the automated tests:
 
-| File | Purpose |
-|---|---|
-| `dbt_project/tests/test_validation_engine.py` | Python validation tests |
-| `scripts/benchmark_100k_validation.py` | Large-dataset benchmark |
-| `scripts/test_pipeline_recovery.py` | Recovery status test |
-| `scripts/test_recovery_scenarios.py` | Recovery scenario tests |
-| `sql/audit/data_quality_metrics.sql` | Data quality metrics |
-| `sql/audit/reconciliation_checks.sql` | Reconciliation checks |
-| `sql/audit/bulk_100k_verification.sql` | Bulk processing verification |
-| `sql/audit/bulk_batch_reconciliation.sql` | Batch reconciliation |
-| `sql/audit/idempotency_verification.sql` | Idempotency verification |
-| `sql/audit/pipeline_health_check.sql` | Pipeline health checks |
+```powershell
+python -m pytest tests/ -v
+```
 
-## 12. Summary
+Run the individual validation tests:
 
-Testing focuses on transaction validation, quarantine handling, corrected-record replay, large-volume processing, downstream dbt tests, reconciliation and recovery behaviour.
+```powershell
+python -m pytest tests/test_validation_engine.py -v
+```
 
-The combination of small sample testing and a 100,000-record synthetic dataset provides a way to evaluate the pipeline at both functional and larger data volumes.
+Run the recovery tests:
+
+```powershell
+python -m pytest tests/test_recovery_scenarios.py -v
+```
+
+Run the benchmark:
+
+```powershell
+python scripts/benchmark_100k_validation.py
+```
+
+Run dbt tests from the dbt project directory:
+
+```powershell
+cd dbt_project
+dbt test
+```
+
+## 12. Conclusion
+
+The automated Python test suite currently contains nine passing tests covering validation and recovery scenarios.
+
+Additional verification is supported by the Snowflake SQL scripts, dbt tests and large-volume synthetic dataset.
+
+The testing approach focuses on data correctness, rejected-record handling, recovery behaviour and consistency across the pipeline.
