@@ -4,238 +4,283 @@
 
 ## About the Project
 
-One of the challenges in data engineering is dealing with incorrect data coming from different sources. Sometimes transaction files contain missing values, invalid customer IDs, negative amounts, or duplicate records. If we process everything without checking, these issues can affect the final reports.
+I built this project to handle data quality problems that commonly occur when processing large transaction datasets.
 
-I developed this project to handle those problems as part of the data pipeline itself.
+For example, a transaction file might contain a missing customer ID, an incorrect transaction amount, an unknown customer, or the same transaction more than once. If these records are processed without checking, they can create problems in the final reports.
 
-The pipeline takes customer and transaction data from CSV and JSON files, loads it into Snowflake, checks the records against different validation rules, and separates clean records from records that need attention.
+In this project, I have built a pipeline that checks incoming data before it reaches the reporting layer. Valid records move forward for further processing, while records with errors are stored separately so they can be investigated and corrected.
 
-Instead of simply rejecting incorrect records, I also implemented a quarantine mechanism where those records are stored along with their error reasons. Once the issues are corrected, eligible records can be processed again using the replay functionality.
+I also worked on a replay mechanism for corrected records, batch processing, audit tracking, Snowflake transformations, dbt models and pipeline monitoring.
 
-The clean data is then transformed into analytical tables, which can be used for reporting and further analysis.
+The project uses Python, PySpark, Snowflake, SQL and dbt.
 
-## Technologies I Used
+## How the Pipeline Works
 
-| Technology | What I used it for |
-|---|---|
-| Python | Building the pipeline and handling processing logic |
-| PySpark | Working with transaction data and applying validation rules |
-| Snowflake | Storing raw, clean, rejected, and analytical data |
-| SQL | Data validation, transformations, and aggregations |
-| dbt | Building and testing analytical models |
-| Pandas | Supporting data processing |
-| Git & GitHub | Managing project code |
-
-## How the Project Works
-
-The project follows a Bronze, Silver, and Gold architecture.
+The pipeline follows a Bronze, Silver and Gold structure.
 
 ```text
-       Customer CSV / Transaction JSON
-                     |
-                     v
-                Bronze Layer
-                     |
-                     v
-              Schema Validation
-                     |
-                     v
-             Business Validation
-                     |
-                     v
-              Duplicate Checking
-                     |
-               +-----+-----+
-               |           |
-               v           v
-           Valid Data   Invalid Data
-               |           |
-               v           v
-           Silver      Quarantine
-               |           |
-               |       Correction
-               |           |
-               |         Replay
-               |           |
-               +-----+-----+
-                     |
-                     v
-                  Gold Layer
-                     |
-                     v
-              Analytical Reports
-                     |
-                     v
-                  dbt Tests
-                     |
-                     v
-              Pipeline Monitoring
+Customer CSV / Transaction JSON
+              |
+              v
+         Data Ingestion
+              |
+              v
+          Bronze Layer
+              |
+              v
+       Schema Validation
+              |
+              v
+      Business Validation
+              |
+              v
+       Duplicate Detection
+              |
+          +---+---+
+          |       |
+          v       v
+        Valid   Invalid
+          |       |
+          v       v
+        Silver  Quarantine
+          |       |
+          |    Correction
+          |       |
+          |     Replay
+          |       |
+          +---+---+
+              |
+              v
+           Gold Layer
+              |
+              v
+          dbt Models
+              |
+              v
+       Testing & Monitoring
 ```
+
+I kept the raw, validated and analytical data separate so that each stage has its own responsibility.
+
+## Technologies
+
+| Technology | Where it is used |
+|---|---|
+| Python | Validation logic, ingestion and orchestration |
+| PySpark | DataFrame processing and validation |
+| Snowflake | Data storage and bulk processing |
+| SQL | Data classification and transformations |
+| dbt | Analytical models and data tests |
+| Pandas | Supporting data operations |
+| GitHub | Source code management |
 
 ## 1. Data Ingestion
 
-I started by preparing customer and transaction source files.
+I prepared two types of source data: customer information in CSV format and transaction information in JSON format.
 
-- Customer information is provided through CSV files.
-- Transaction information is provided through JSON files.
-- Raw records are loaded into Snowflake Bronze tables.
-- For the larger dataset, I used Snowflake stages and `COPY INTO` for bulk loading.
+These files are loaded into Snowflake's Bronze layer. For the larger dataset, I used Snowflake stages and `COPY INTO` rather than loading each record individually.
 
-The main ingestion files are:
+The main files involved are:
 
 - `src/ingestion/bronze_ingestion.py`
-- `scripts/bulk_load_to_snowflake.py`
 - `scripts/generate_large_dataset.py`
+- `scripts/bulk_load_to_snowflake.py`
 
-## 2. Data Validation
+## 2. Data Quality Validation
 
-After ingestion, the records go through validation.
+After loading the data, the pipeline checks whether the records meet the required conditions.
 
-I divided validation into three main areas.
+I separated the validation logic into three modules.
 
 **Schema validation**
 
-Checks whether the incoming records contain the required fields and expected data types.
+Checks the structure of the incoming data, including required fields and expected data types.
 
 **Business validation**
 
-Checks whether the transaction information makes sense according to the business rules.
+Checks the transaction values against the business rules.
 
-The rules include:
-
-- Event ID should not be empty.
-- Customer ID should not be empty.
-- Customer ID must exist in the customer table.
-- Event type should be either CREDIT or DEBIT.
-- Transaction amount must be greater than zero.
-- Transaction timestamp should be available.
+| Field | Validation |
+|---|---|
+| EVENT_ID | Cannot be null |
+| CUSTOMER_ID | Cannot be null |
+| CUSTOMER_ID | Must exist in customer master data |
+| EVENT_TYPE | Must be CREDIT or DEBIT |
+| AMOUNT | Must be greater than zero |
+| EVENT_TIMESTAMP | Cannot be null |
 
 **Duplicate validation**
 
-Checks whether an event ID is repeated in the incoming data or already exists in the Silver layer.
+Checks whether an event ID is repeated within the incoming batch or already exists in the Silver layer.
 
-Files used:
+The validation code is maintained in:
 
 - `src/validation/schema_validation.py`
 - `src/validation/business_validation.py`
 - `src/validation/duplicate_validation.py`
 
-## 3. Bronze, Silver and Gold Layers
+The validation modules provide the foundation for applying additional data quality rules, including completeness, uniqueness, referential integrity and range checks.
 
-I separated the data into different layers so that each stage has a clear responsibility.
+## 3. Bronze, Silver and Gold
 
-**Bronze:** Stores the incoming raw customer and transaction records.
+I used three layers to organize the data.
 
-**Silver:** Stores records that have passed the required validation checks.
+- **Bronze:** Keeps the raw customer and transaction records.
+- **Silver:** Contains validated transactions and the quarantine records.
+- **Gold:** Contains the final transaction data and daily summaries used for reporting.
 
-**Gold:** Contains the final transaction-level and aggregated data used for analytics.
-
-This separation also makes it easier to identify where a data quality issue occurred.
+This separation helps keep the processing flow organized and makes it easier to trace data between stages.
 
 ## 4. Quarantine and Replay
 
-One important part of this project is that invalid records are not simply discarded.
+One thing I wanted to avoid was simply deleting records that failed validation.
 
-I created a separate quarantine table in Snowflake to store rejected records and their error reasons.
+For that reason, I created a quarantine table in Snowflake. When a transaction fails validation, the original payload and its error information are stored there.
 
-For example, if a transaction contains a negative amount or an unknown customer ID, the record is moved to quarantine.
+The quarantine table maintains:
 
-After correcting the issue, the replay process can validate the record again and process it if it passes the required checks.
+- Quarantine ID.
+- Event ID and customer ID.
+- Original record payload.
+- Error reason.
+- Source file and run ID.
+- Processing status.
+- Replay count.
+- Created and updated timestamps.
 
-I also maintain replay history so that replay attempts and their outcomes can be tracked.
+The main table is `SILVER.QUARANTINE_RECORDS`.
 
-Main tables:
+Once a rejected record is corrected, the replay process validates it again and processes it if it meets the required conditions.
 
-- `SILVER.QUARANTINE_RECORDS`
-- `AUDIT.REPLAY_HISTORY`
+Replay information is maintained in `AUDIT.REPLAY_HISTORY`.
 
-Implementation:
+The related Python files are:
 
 - `src/quarantine/replay.py`
 - `src/quarantine/replay_runner.py`
 
-## 5. Processing 100,000 Transaction Records
+## 5. Processing 100,000 Transactions
 
-I wanted to test the solution with more than just a few sample records, so I generated a larger dataset containing 100,000 transactions and 1,000 customer records.
+I also wanted to test the pipeline with a larger dataset instead of depending only on a few sample records.
 
-I deliberately introduced data quality issues into the generated transactions.
+I generated 1,000 customer records and 100,000 transaction records. The transaction generator deliberately introduces different data quality issues.
 
-| Record type | Expected count |
+| Record category | Expected count |
 |---|---:|
 | Total transactions | 100,000 |
 | Valid transactions | 99,600 |
-| Business-invalid records | 300 |
-| Duplicate records | 100 |
-| Total rejected records | 400 |
+| Business-invalid transactions | 300 |
+| Duplicate transactions | 100 |
+| Total rejected transactions | 400 |
 
-The dataset includes missing customer IDs, unknown customer IDs, negative amounts, and duplicate event IDs.
+The invalid records include unknown customers, missing customer IDs and negative amounts. Duplicate event IDs are also included.
 
-I used Snowflake bulk loading to load the dataset and SQL-based processing inside Snowflake for the bulk Silver transformation.
+I used Snowflake bulk loading to ingest this dataset. The bulk Silver processing uses SQL inside Snowflake to classify records, merge valid transactions and insert rejected records into quarantine.
 
-## 6. Gold Layer and Reporting
+The main files are:
 
-After processing, I created two main tables for analytical reporting.
+- `scripts/generate_large_dataset.py`
+- `scripts/bulk_load_to_snowflake.py`
+- `scripts/benchmark_100k_validation.py`
+- `src/transformation/bulk_silver_pipeline.py`
 
-**`GOLD.FACT_TRANSACTIONS`**
+## 6. Snowflake Database Design
 
-Contains transaction-level information such as event ID, customer ID, transaction type, amount, timestamp, source file, and batch ID.
+The project uses the database `SMART_DATA_QUALITY_DB`.
 
-**`GOLD.DAILY_TRANSACTION_SUMMARY`**
+I separated the database into schemas based on the different stages of processing.
 
-Provides daily transaction information, including:
+| Schema | What it contains |
+|---|---|
+| BRONZE | Raw customer and transaction data |
+| SILVER | Validated transactions and quarantine records |
+| GOLD | Analytical tables |
+| AUDIT | Pipeline runs and replay history |
+| DBT_STAGING | dbt staging models |
+| DBT_GOLD | dbt analytical models |
+
+Some of the main tables are:
+
+- `BRONZE.CUSTOMERS`
+- `BRONZE.RAW_TRANSACTIONS`
+- `SILVER.VALID_TRANSACTIONS`
+- `SILVER.QUARANTINE_RECORDS`
+- `GOLD.FACT_TRANSACTIONS`
+- `GOLD.DAILY_TRANSACTION_SUMMARY`
+- `AUDIT.PIPELINE_RUNS`
+- `AUDIT.REPLAY_HISTORY`
+
+## 7. Gold Layer and Daily Reports
+
+After the Silver processing, I created two tables for analytical reporting.
+
+**GOLD.FACT_TRANSACTIONS**
+
+Stores individual transaction details, including event ID, customer ID, transaction type, amount, timestamp, source file and run ID.
+
+**GOLD.DAILY_TRANSACTION_SUMMARY**
+
+Provides daily transaction information:
 
 - Total number of transactions.
 - Total transaction amount.
 - Total credit amount.
 - Total debit amount.
 
-This makes it easier to understand transaction activity without repeatedly processing the raw records.
+This allows daily transaction activity to be analysed without repeatedly querying and aggregating the raw source records.
 
-## 7. dbt Integration
+The related SQL files are:
 
-I also integrated dbt with Snowflake to manage the analytical transformations.
+- `sql/gold/fact_transactions.sql`
+- `sql/gold/daily_transaction_summary.sql`
+- `sql/gold/refresh_bulk_gold.sql`
 
-The dbt project contains staging models, mart models, source definitions, and data quality tests.
+## 8. dbt Integration
 
-Some of the models include:
+I integrated dbt with Snowflake to organize the analytical models and run tests on the transformed data.
 
+The project contains staging and mart models.
+
+Staging:
 - `stg_valid_transactions.sql`
+
+Marts:
 - `dim_fact_transactions.sql`
 - `daily_transaction_summary.sql`
 
-I used dbt to execute the models and verify the data through schema and data quality tests.
+I also added source definitions and schema tests.
 
-## 8. Pipeline Monitoring and Recovery
+To execute the dbt project:
 
-I added monitoring so that the pipeline can be checked after processing.
+```powershell
+cd dbt_project
+dbt debug
+dbt run
+dbt test
+```
 
-The health monitoring component checks the record counts across Bronze, Silver, Quarantine, and Gold. It also checks reconciliation, duplicate records, and pipeline audit status.
+## 9. Pipeline Monitoring and Recovery
 
-I also implemented a recovery controller to handle batch processing decisions.
+I added monitoring to check whether the records are moving correctly between the different layers.
 
-The recovery logic avoids retrying a batch that already has a successful audit record. I tested the recovery controller using isolated unit tests covering successful batches, partial batches, retry attempts, and exhausted retries.
+The health monitor checks record counts in Bronze, Silver, Quarantine and Gold. It also checks reconciliation, duplicate records and pipeline audit status.
 
-The recovery unit tests use mocked processing operations; actual recovery from a live Snowflake failure still requires separate failure-injection testing.
+I created a recovery controller to check the status of a batch before deciding whether it needs to be processed again.
 
-Main files:
+The recovery tests cover four situations:
+
+1. A completed batch should not be processed again.
+2. A partially processed batch should not be blindly reprocessed.
+3. A failed processing attempt should be eligible for retry.
+4. A failure should be recorded when retry attempts are exhausted.
+
+The recovery controller scenarios were tested using mocked processing operations.
+
+The main files are:
 
 - `src/monitoring/pipeline_health_monitor.py`
 - `src/monitoring/pipeline_recovery.py`
-
-## 9. Snowflake Database Structure
-
-I organized the Snowflake database according to the different stages of the pipeline.
-
-**Database:** `SMART_DATA_QUALITY_DB`
-
-| Schema | Purpose |
-|---|---|
-| BRONZE | Raw customer and transaction data |
-| SILVER | Validated transactions and quarantine records |
-| GOLD | Final analytical tables |
-| AUDIT | Pipeline runs and replay history |
-| DBT_STAGING | dbt staging models |
-| DBT_GOLD | dbt analytical models |
+- `sql/audit/`
 
 ## 10. Project Structure
 
@@ -274,6 +319,7 @@ YottaflextInOfficeHackthon/
 │   ├── generate_large_dataset.py
 │   ├── bulk_load_to_snowflake.py
 │   ├── benchmark_100k_validation.py
+│   ├── test_pipeline_recovery.py
 │   └── test_recovery_scenarios.py
 │
 ├── docs/
@@ -283,9 +329,9 @@ YottaflextInOfficeHackthon/
 └── README.md
 ```
 
-## 11. How to Run the Project
+## 11. Installation
 
-### Prerequisites
+### Requirements
 
 - Python 3.10 or later.
 - Snowflake account.
@@ -294,68 +340,79 @@ YottaflextInOfficeHackthon/
 
 ### Clone the repository
 
-```bash
-git clone YOUR_GITHUB_REPOSITORY_URL
-cd YottaflextInOfficeHackthon
+```powershell
+git clone https://github.com/ra7je/smart-data-quality-quarantine-pipeline.git
+cd smart-data-quality-quarantine-pipeline
 ```
 
 ### Create a virtual environment
 
-```bash
-python -m venv venv
-```
-
-Activate it on Windows:
-
 ```powershell
+python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
-### Install the dependencies
+### Install dependencies
 
-```bash
+```powershell
 pip install -r requirements.txt
 ```
 
 ### Configure Snowflake
 
-Configure your Snowflake account credentials locally.
+The connection requires the Snowflake account, username, password, warehouse, database and schema.
 
-The connection requires an account, username, password, warehouse, database, and schema.
+The Python connection asks for the password locally. The dbt profile reads the `SNOWFLAKE_PASSWORD` environment variable.
 
-Do not upload passwords or other sensitive credentials to GitHub.
+In PowerShell:
 
-### Run the Snowflake connection test
+```powershell
+$env:SNOWFLAKE_PASSWORD = Read-Host "Enter Snowflake password"
+```
+
+Keep credentials in your local environment. Do not upload passwords to GitHub.
+
+## 12. Running the Project
+
+Run these commands from the project root.
+
+**Test the Snowflake connection**
 
 ```powershell
 python -m src.snowflake.test_connection
 ```
 
-### Generate the 100K dataset
+**Generate the 100K dataset**
 
 ```powershell
 python scripts/generate_large_dataset.py
 ```
 
-### Load data into Snowflake
+**Load the dataset into Snowflake**
 
 ```powershell
 python scripts/bulk_load_to_snowflake.py
 ```
 
-### Run the recovery tests
+**Run the validation benchmark**
+
+```powershell
+python scripts/benchmark_100k_validation.py
+```
+
+**Run recovery tests**
 
 ```powershell
 python -m unittest scripts.test_recovery_scenarios -v
 ```
 
-### Run the pipeline health monitor
+**Run pipeline monitoring**
 
 ```powershell
 python -m src.monitoring.pipeline_health_monitor
 ```
 
-### Run dbt
+**Run dbt models and tests**
 
 ```powershell
 cd dbt_project
@@ -364,52 +421,65 @@ dbt run
 dbt test
 ```
 
-Run each component according to the pipeline execution order and configured batch ID. Avoid rerunning a successfully processed production batch simply for testing.
+The components should be executed in the correct pipeline order, using the configured batch ID.
 
-## 12. Development and Testing
+## 13. Testing
 
-During development, I tested the project using both sample records and the generated 100K dataset.
+During development, I tested the pipeline with sample transactions and the generated 100K dataset.
 
 The following executions were reported successful:
 
-- Snowflake connection.
-- Bulk ingestion of 100,000 transaction records.
-- Python validation tests.
-- dbt model execution.
-- dbt tests (10 passed in an earlier execution).
-- Recovery controller unit tests (4 passed).
-- Gold daily transaction summary generation.
-- Completed-batch retry protection.
+| Test | Result |
+|---|---|
+| Snowflake connection | Successful |
+| 100K bulk ingestion | Successful |
+| Python validation tests | 5 passed in an earlier run |
+| dbt execution | Successful |
+| dbt tests | 10 passed in an earlier run |
+| Recovery controller tests | 4 passed |
+| Gold daily summary | Generated successfully |
+| Completed-batch protection | Successful |
 
-The final health-monitor output and full end-to-end reconciliation should be checked before submission.
+The dataset counts shown earlier are the expected counts from the generator. Actual processing counts should be taken from the Snowflake audit and reconciliation queries.
 
-## 13. Future Improvements
+## 14. AI Assistance
 
-There are still opportunities to extend this project.
+AI assistance was used during development to understand the problem statement, discuss the architecture, troubleshoot code, prepare test scenarios and improve documentation.
 
-Some improvements I would like to work on are:
+Some of the prompts used were:
 
-- A dashboard to display data quality metrics.
-- Automated notifications when a pipeline fails.
-- Stronger batch-level idempotency and concurrent processing protection.
-- Live failure-injection testing.
-- Scheduled pipeline execution.
-- Deployment to a cloud environment.
+**Understanding the project**
 
-## 14. What I Learned
+"Explain the complete data quality pipeline and guide me through building it from scratch."
 
-While building this project, I got practical experience working with different stages of a data engineering pipeline.
+**Validation**
 
-I learned how to load large datasets into Snowflake, apply validation rules, handle duplicates, manage rejected records, replay corrected data, build analytical models using dbt, and monitor pipeline execution.
+"Help me implement data validation for missing fields, duplicate transactions, invalid amounts and unknown customer references."
 
-More importantly, I understood how individual components such as Python, SQL, Snowflake, PySpark, and dbt work together in a complete data engineering solution.
+**Snowflake**
 
----
+"Help me design the Bronze, Silver and Gold layers and process a large transaction dataset using Snowflake SQL."
 
-**Project Name:** Smart Data Quality & Quarantine Pipeline
+**Quarantine**
+
+"Help me build a quarantine mechanism that stores rejected records and supports replay after correction."
+
+**Testing**
+
+"Help me test the pipeline for duplicate records, invalid data, failed batches and recovery scenarios."
+
+AI was used as a development assistant. The code was executed and tested in the project environment.
+
+## 15. Project Summary
+
+The final pipeline brings together data ingestion, validation, duplicate detection, quarantine, replay, Snowflake transformations, dbt models and monitoring.
+
+The main focus throughout development was to make rejected records traceable, keep validated data separate from raw data, and maintain information about what happened during each processing run.
+
+**Project:** Smart Data Quality & Quarantine Pipeline
 
 **Hackathon:** YottaFlex.ai
 
 **Domain:** Data Engineering
 
-**Technology Stack:** Python | PySpark | Snowflake | SQL | dbt
+**Technologies:** Python | PySpark | Snowflake | SQL | dbt
