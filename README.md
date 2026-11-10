@@ -442,33 +442,22 @@ The following executions were reported successful:
 
 The dataset counts shown earlier are the expected counts from the generator. Actual processing counts should be taken from the Snowflake audit and reconciliation queries.
 
-## 14. AI Assistance
+## AI Assistance and Development
 
-AI assistance was used during development to understand the problem statement, discuss the architecture, troubleshoot code, prepare test scenarios and improve documentation.
+I completed most of the project development myself, understanding the problem statement, planning the architecture, setting up the Snowflake database, developing the pipeline components, implementing validation logic, and working on the data transformations.
 
-Some of the prompts used were:
+During development, I also used AI as a supporting tool to help with certain parts of the implementation. It helped me troubleshoot issues, improve existing code, complete some remaining components, prepare test scenarios, and review the overall pipeline.
 
-**Understanding the project**
+I was responsible for understanding the requirements, making the technical decisions, integrating the components, running the code, and checking the results in my development environment.
 
-"Explain the complete data quality pipeline and guide me through building it from scratch."
+AI assistance was mainly used during the following stages:
 
-**Validation**
+- Improving and troubleshooting existing Python and SQL code.
+- Completing some remaining pipeline components.
+- Reviewing validation and transformation logic.
+- Working through quarantine, replay and recovery scenarios.
+- Preparing additional test cases and project documentation.
 
-"Help me implement data validation for missing fields, duplicate transactions, invalid amounts and unknown customer references."
-
-**Snowflake**
-
-"Help me design the Bronze, Silver and Gold layers and process a large transaction dataset using Snowflake SQL."
-
-**Quarantine**
-
-"Help me build a quarantine mechanism that stores rejected records and supports replay after correction."
-
-**Testing**
-
-"Help me test the pipeline for duplicate records, invalid data, failed batches and recovery scenarios."
-
-AI was used as a development assistant. The code was executed and tested in the project environment.
 
 ## 15. Project Summary
 
