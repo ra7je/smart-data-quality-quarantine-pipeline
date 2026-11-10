@@ -1,0 +1,8 @@
+snowflake-connector-python
+pyspark
+pandas
+numpy
+python-dotenv
+dbt-core
+dbt-snowflake
+pytest

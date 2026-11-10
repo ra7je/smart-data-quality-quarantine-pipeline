@@ -1,0 +1,48 @@
+
+version: 2
+
+models:
+  - name: stg_valid_transactions
+    description: Standardized validated transaction records.
+    columns:
+      - name: EVENT_ID
+        data_tests:
+          - not_null
+          - unique
+
+      - name: CUSTOMER_ID
+        data_tests:
+          - not_null
+
+      - name: EVENT_TYPE
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['CREDIT', 'DEBIT']
+
+      - name: AMOUNT
+        data_tests:
+          - not_null
+
+  - name: dim_fact_transactions
+    description: dbt-managed transaction fact table.
+    columns:
+      - name: EVENT_ID
+        data_tests:
+          - not_null
+          - unique
+
+      - name: AMOUNT
+        data_tests:
+          - not_null
+
+  - name: daily_transaction_summary
+    description: Daily transaction aggregates by event type.
+    columns:
+      - name: TRANSACTION_DATE
+        data_tests:
+          - not_null
+
+      - name: EVENT_TYPE
+        data_tests:
+          - not_null

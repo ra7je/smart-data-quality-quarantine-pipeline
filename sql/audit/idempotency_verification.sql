@@ -1,0 +1,72 @@
+
+-- =====================================================
+-- 1. CHECK DUPLICATES IN SILVER
+-- =====================================================
+
+SELECT
+    EVENT_ID,
+    COUNT(*) AS RECORD_COUNT
+FROM SMART_DATA_QUALITY_DB.SILVER.VALID_TRANSACTIONS
+WHERE RUN_ID = 'BULK_100K_20261110'
+GROUP BY EVENT_ID
+HAVING COUNT(*) > 1;
+
+
+-- =====================================================
+-- 2. CHECK DUPLICATES IN QUARANTINE
+-- =====================================================
+
+SELECT
+    QUARANTINE_ID,
+    COUNT(*) AS RECORD_COUNT
+FROM SMART_DATA_QUALITY_DB.SILVER.QUARANTINE_RECORDS
+WHERE RUN_ID = 'BULK_100K_20261110'
+GROUP BY QUARANTINE_ID
+HAVING COUNT(*) > 1;
+
+
+-- =====================================================
+-- 3. CHECK DUPLICATES IN GOLD
+-- =====================================================
+
+SELECT
+    EVENT_ID,
+    COUNT(*) AS RECORD_COUNT
+FROM SMART_DATA_QUALITY_DB.GOLD.FACT_TRANSACTIONS
+WHERE RUN_ID = 'BULK_100K_20261110'
+GROUP BY EVENT_ID
+HAVING COUNT(*) > 1;
+
+
+-- =====================================================
+-- 4. CHECK AUDIT RUN
+-- =====================================================
+
+SELECT
+    RUN_ID,
+    COUNT(*) AS AUDIT_RECORD_COUNT
+FROM SMART_DATA_QUALITY_DB.AUDIT.PIPELINE_RUNS
+WHERE RUN_ID = 'BULK_100K_20261110_SILVER'
+GROUP BY RUN_ID;
+
+
+-- =====================================================
+-- 5. CHECK RECONCILIATION
+-- =====================================================
+
+SELECT
+    (SELECT COUNT(*)
+     FROM SMART_DATA_QUALITY_DB.BRONZE.RAW_TRANSACTIONS
+     WHERE RUN_ID = 'BULK_100K_20261110') AS BRONZE_COUNT,
+
+    (SELECT COUNT(*)
+     FROM SMART_DATA_QUALITY_DB.SILVER.VALID_TRANSACTIONS
+     WHERE RUN_ID = 'BULK_100K_20261110') AS SILVER_COUNT,
+
+    (SELECT COUNT(*)
+     FROM SMART_DATA_QUALITY_DB.SILVER.QUARANTINE_RECORDS
+     WHERE RUN_ID = 'BULK_100K_20261110') AS QUARANTINE_COUNT,
+
+    (SELECT COUNT(*)
+     FROM SMART_DATA_QUALITY_DB.GOLD.FACT_TRANSACTIONS
+     WHERE RUN_ID = 'BULK_100K_20261110') AS GOLD_COUNT;

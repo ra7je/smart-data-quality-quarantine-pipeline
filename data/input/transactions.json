@@ -1,0 +1,8 @@
+{"event_id":"TXN001","customer_id":"C101","event_type":"CREDIT","amount":500.00,"event_timestamp":"2026-11-10T09:00:00"}
+{"event_id":"TXN002","customer_id":"C102","event_type":"DEBIT","amount":1000.00,"event_timestamp":"2026-11-10T09:15:00"}
+{"event_id":"TXN003","customer_id":"C103","event_type":"CREDIT","amount":750.00,"event_timestamp":"2026-11-10T09:30:00"}
+{"event_id":"TXN004","customer_id":"C999","event_type":"DEBIT","amount":300.00,"event_timestamp":"2026-11-10T09:45:00"}
+{"event_id":"TXN005","customer_id":"C101","event_type":"CREDIT","amount":-200.00,"event_timestamp":"2026-11-10T10:00:00"}
+{"event_id":"TXN006","customer_id":null,"event_type":"DEBIT","amount":400.00,"event_timestamp":"2026-11-10T10:15:00"}
+{"event_id":"TXN007","customer_id":"C104","event_type":"CREDIT","amount":900.00,"event_timestamp":"2026-11-10T10:30:00"}
+{"event_id":"TXN007","customer_id":"C104","event_type":"CREDIT","amount":900.00,"event_timestamp":"2026-11-10T10:30:00"}

@@ -1,0 +1,106 @@
+
+-- =====================================================
+-- BULK 100K END-TO-END RECONCILIATION
+-- =====================================================
+
+-- 1. BRONZE COUNT
+WITH bronze AS (
+    SELECT COUNT(*) AS TOTAL
+    FROM SMART_DATA_QUALITY_DB.BRONZE.RAW_TRANSACTIONS
+    WHERE RUN_ID = 'BULK_100K_20261110'
+),
+
+-- 2. SILVER COUNT
+silver AS (
+    SELECT COUNT(*) AS TOTAL
+    FROM SMART_DATA_QUALITY_DB.SILVER.VALID_TRANSACTIONS
+    WHERE RUN_ID = 'BULK_100K_20261110'
+),
+
+-- 3. QUARANTINE COUNT
+quarantine AS (
+    SELECT COUNT(*) AS TOTAL
+    FROM SMART_DATA_QUALITY_DB.SILVER.QUARANTINE_RECORDS
+    WHERE RUN_ID = 'BULK_100K_20261110'
+),
+
+-- 4. GOLD COUNT
+gold AS (
+    SELECT COUNT(*) AS TOTAL
+    FROM SMART_DATA_QUALITY_DB.GOLD.FACT_TRANSACTIONS
+    WHERE RUN_ID = 'BULK_100K_20261110'
+)
+
+SELECT
+    bronze.TOTAL AS BRONZE_COUNT,
+    silver.TOTAL AS SILVER_COUNT,
+    quarantine.TOTAL AS QUARANTINE_COUNT,
+    gold.TOTAL AS GOLD_COUNT,
+
+    silver.TOTAL + quarantine.TOTAL AS PROCESSED_COUNT,
+
+    CASE
+        WHEN bronze.TOTAL = silver.TOTAL + quarantine.TOTAL
+        THEN 'PASS'
+        ELSE 'FAIL'
+    END AS BRONZE_RECONCILIATION,
+
+    CASE
+        WHEN silver.TOTAL = gold.TOTAL
+        THEN 'PASS'
+        ELSE 'FAIL'
+    END AS SILVER_GOLD_RECONCILIATION
+
+FROM bronze, silver, quarantine, gold;
+
+
+-- =====================================================
+-- 5. QUARANTINE REJECTION REASONS
+-- =====================================================
+
+SELECT
+    ERROR_REASON,
+    STATUS,
+    COUNT(*) AS RECORD_COUNT
+
+FROM SMART_DATA_QUALITY_DB.SILVER.QUARANTINE_RECORDS
+
+WHERE RUN_ID = 'BULK_100K_20261110'
+
+GROUP BY ERROR_REASON, STATUS
+
+ORDER BY RECORD_COUNT DESC;
+
+
+-- =====================================================
+-- 6. AUDIT PIPELINE EXECUTION
+-- =====================================================
+
+SELECT
+    RUN_ID,
+    INPUT_COUNT,
+    VALID_COUNT,
+    REJECTED_COUNT,
+    DUPLICATE_COUNT,
+    RUN_STATUS,
+    EXECUTION_SECONDS
+
+FROM SMART_DATA_QUALITY_DB.AUDIT.PIPELINE_RUNS
+
+WHERE RUN_ID = 'BULK_100K_20261110_SILVER';
+
+
+-- =====================================================
+-- 7. GOLD DAILY SUMMARY
+-- =====================================================
+
+SELECT
+    TRANSACTION_DATE,
+    TOTAL_TRANSACTIONS,
+    TOTAL_AMOUNT,
+    TOTAL_CREDIT,
+    TOTAL_DEBIT
+
+FROM SMART_DATA_QUALITY_DB.GOLD.DAILY_TRANSACTION_SUMMARY
+
+ORDER BY TRANSACTION_DATE;
